@@ -102,7 +102,7 @@ function EmptyState({ onClear, L }: { onClear: () => void; L: L }) {
 
 export default function CwPlatform() {
   const [lang, setLang] = useState<Lang>("en");
-  const [authView, setAuthView] = useState<AuthView>("app");
+  const [authView, setAuthView] = useState<AuthView>("login");
   const [view, setView] = useState<View>("overview");
   const [search, setSearch] = useState("");
   const [passportFilter, setPassportFilter] = useState("All materials");

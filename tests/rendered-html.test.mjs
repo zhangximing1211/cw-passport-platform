@@ -12,17 +12,15 @@ async function render() {
   );
 }
 
-test("renders the CW Passport platform", async () => {
+test("renders the CW Passport sign-in directly", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   const html = await response.text();
   assert.match(html, /CW Passport/);
-  assert.match(html, /Construction Waste Intelligence Overview/);
-  assert.match(html, /Passport Registry/);
-  assert.match(html, /Material Flow Overview/);
-  assert.match(html, /DPP-HK-2026-00428/);
-  assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Building your site/);
+  assert.match(html, /Sign in to your workspace/);
+  assert.match(html, /demo1234/);
+  assert.doesNotMatch(html, /signin-with-chatgpt|Sign in with ChatGPT|codex-preview|SkeletonPreview|Building your site/);
 });
 
 test("emits site-specific sharing metadata", async () => {
