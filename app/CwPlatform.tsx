@@ -112,7 +112,6 @@ export default function CwPlatform() {
   const [listingMode, setListingMode] = useState<"grid" | "table">("grid");
   const [selectedPassport, setSelectedPassport] = useState(PASSPORTS[0]);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [notificationOpen, setNotificationOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [registerModal, setRegisterModal] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -128,7 +127,6 @@ export default function CwPlatform() {
 
   const navigate = (next: View) => {
     setDrawerOpen(false);
-    setNotificationOpen(false);
     setUserMenuOpen(false);
     setMobileNav(false);
     if (next === view) return;
@@ -148,7 +146,7 @@ export default function CwPlatform() {
         searchRef.current?.focus();
       }
       if (event.key === "Escape") {
-        setDrawerOpen(false); setNotificationOpen(false); setUserMenuOpen(false); setRegisterModal(false);
+        setDrawerOpen(false); setUserMenuOpen(false); setRegisterModal(false);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -227,9 +225,6 @@ export default function CwPlatform() {
           </div>)}
         </nav>
         <div className="sidebar-foot">
-          <button className="nav-item" onClick={() => { setNotificationOpen(true); setMobileNav(false); }}><span className="nav-glyph">NT</span><span>{L("Notifications", "通知")}</span><em>3</em></button>
-          <button className="nav-item" onClick={() => showToast(L("Settings remain managed by your organisation", "設定仍由您的機構管理"))}><span className="nav-glyph">ST</span><span>{L("Settings", "設定")}</span></button>
-          <button className="nav-item" onClick={() => showToast(L("Help Center opened in preview mode", "說明中心已以預覽模式開啟"))}><span className="nav-glyph">HC</span><span>{L("Help Center", "說明中心")}</span></button>
           <button className="user-card" onClick={() => setUserMenuOpen(!userMenuOpen)}><span className="avatar">AL</span><span><strong>Alex Leung</strong><small>Platform Administrator</small></span><b>•••</b></button>
         </div>
       </aside>
@@ -241,23 +236,14 @@ export default function CwPlatform() {
           <div className="top-actions">
             <select aria-label="Date range" defaultValue="30"><option value="30">{L("Last 30 days", "最近 30 日")}</option><option value="90">{L("Last 90 days", "最近 90 日")}</option><option value="365">{L("This year", "本年度")}</option></select>
             <button onClick={exportData}><span className="action-code">EX</span>{L("Export", "匯出")}</button>
-            <button className="notification-btn" onClick={() => setNotificationOpen(!notificationOpen)} aria-label="Notifications"><span className="action-code">NT</span><i>3</i></button>
             <button className="lang-toggle" onClick={() => setLang(lang === "en" ? "zh" : "en")}>{lang === "en" ? "繁" : "EN"}</button>
             <button className="avatar dark" onClick={() => setUserMenuOpen(!userMenuOpen)}>AL</button>
           </div>
         </header>
 
-        {notificationOpen && <div className="popover notifications-popover">
-          <div className="popover-head"><strong>{L("Notifications", "通知")}</strong><button onClick={() => setNotificationOpen(false)}>×</button></div>
-          <div className="notice-item unread"><span>PD</span><div><strong>{L("Passport data incomplete", "護照資料未完整")}</strong><p>8 digital passports require source details.</p><small>18 min ago</small></div></div>
-          <div className="notice-item unread"><span>CB</span><div><strong>{L("Document review pending", "文件待審核")}</strong><p>3 cross-border records await review.</p><small>42 min ago</small></div></div>
-          <div className="notice-item"><span>SL</span><div><strong>{L("Listing verification", "刊登驗證")}</strong><p>6 listings are awaiting verification.</p><small>2 hr ago</small></div></div>
-        </div>}
-
         {userMenuOpen && <div className="popover user-popover">
           <div className="profile-row"><span className="avatar">AL</span><div><strong>Alex Leung</strong><small>alex.leung@cwpassport.hk</small></div></div>
           <button onClick={() => showToast(L("Profile panel opened", "個人資料面板已開啟"))}>{L("User Profile", "使用者資料")}</button>
-          <button onClick={() => showToast(L("Settings remain managed by your organisation", "設定仍由您的機構管理"))}>{L("Settings", "設定")}</button>
           <button className="signout" onClick={() => { setUserMenuOpen(false); setAuthView("login"); }}>{L("Sign out", "登出")}</button>
         </div>}
 
