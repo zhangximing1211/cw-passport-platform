@@ -9,8 +9,6 @@ Construction Waste Digital Passport Platform / 建废数码护照平台。
 | 项目 | 当前状态 |
 | --- | --- |
 | 正式网址 | <https://construction-waste-passport.site> |
-| Sites 备用网址 | <https://construction-waste-passport-2026.ximingzhang.chatgpt.site> |
-| 访问模式 | Public，访客不需要经过 ChatGPT 登录 |
 | 自定义域名 | Active |
 | HTTPS / SSL | Active |
 | 数据库 D1 | 未启用 |
