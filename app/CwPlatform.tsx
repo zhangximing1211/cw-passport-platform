@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type Lang = "en" | "zh";
-type View = "overview" | "passport-registry" | "passport-detail" | "crossborder" | "crossborder-detail" | "listings" | "listing-detail";
+type View = "overview" | "passport-registry" | "passport-detail" | "crossborder" | "crossborder-detail" | "listings" | "listing-detail" | "match-trades";
 type AuthView = "app" | "login" | "register" | "forgot";
 type L = (en: string, zh: string) => string;
 
@@ -20,6 +20,26 @@ type Transfer = {
 type Listing = {
   id: string; passportId: string; transferId?: string; material: string; category: string;
   quantity: string; location: string; available: string; status: string; seller: string; tone: string;
+  nftTokenId: string; nftType: string; mintStatus: "draft" | "minted" | "listed"; txHash?: string;
+};
+
+type Demand = {
+  id: string; company: string; industry: string; region: string; category: string;
+  quantity: string; deadline: string; contact: string;
+};
+
+type CompanyRecord = {
+  company: string; industry: string; region: string; regionCode: string;
+  needs: string; capacity: string; history: string; rating: number;
+};
+
+type Match = {
+  id: string; listingId: string; demandId: string; score: number; reasons: string[]; matchedOn: string;
+};
+
+type Trade = {
+  id: string; listingId: string; demandId: string; buyer: string; seller: string;
+  quantity: string; price: string; status: "In Progress" | "Completed" | "Settled"; txHash?: string; tradedOn: string;
 };
 
 const PASSPORTS: Passport[] = [
@@ -40,13 +60,100 @@ const TRANSFERS: Transfer[] = [
 ];
 
 const LISTINGS: Listing[] = [
-  { id:"LST-HK-2026-0186", passportId:"DPP-HK-2026-00428", transferId:"CBT-HK-SZ-2026-0128", material:"Recycled Concrete Aggregate", category:"Concrete", quantity:"320 t", location:"Tuen Mun, Hong Kong", available:"20 Sep 2026", status:"Verified", seller:"Circular Materials Ltd", tone:"concrete" },
-  { id:"LST-HK-2026-0174", passportId:"DPP-HK-2026-00417", transferId:"CBT-HK-DG-2026-0119", material:"Structural Steel Sections", category:"Steel", quantity:"84 t", location:"Kwai Tsing, Hong Kong", available:"Available now", status:"Verified", seller:"Metro Reuse Co.", tone:"steel" },
-  { id:"LST-HK-2026-0168", passportId:"DPP-HK-2026-00396", material:"Reclaimed Timber Beams", category:"Timber", quantity:"46 t", location:"Yuen Long, Hong Kong", available:"25 Sep 2026", status:"Pending", seller:"TimberLoop Ltd", tone:"timber" },
-  { id:"LST-MO-2026-0062", passportId:"DPP-MO-2026-00381", transferId:"CBT-MO-ZH-2026-0042", material:"Crushed Glass Aggregate", category:"Glass", quantity:"38 t", location:"Taipa, Macau", available:"28 Sep 2026", status:"Verified", seller:"Macau Circular Works", tone:"glass" },
-  { id:"LST-HK-2026-0152", passportId:"DPP-HK-2026-00372", material:"Mixed Mineral Recovery", category:"Mixed", quantity:"216 t", location:"Fanling, Hong Kong", available:"22 Sep 2026", status:"Processing", seller:"NorthLoop Resources", tone:"mixed" },
-  { id:"LST-HK-2026-0149", passportId:"DPP-HK-2026-00354", transferId:"CBT-HK-FS-2026-0108", material:"Recovered Aluminium", category:"Metal", quantity:"24 t", location:"Kwai Tsing, Hong Kong", available:"Available now", status:"Verified", seller:"Urban Alloy Ltd", tone:"aluminium" },
+  { id:"LST-HK-2026-0186", passportId:"DPP-HK-2026-00428", transferId:"CBT-HK-SZ-2026-0128", material:"Recycled Concrete Aggregate", category:"Concrete", quantity:"320 t", location:"Tuen Mun, Hong Kong", available:"20 Sep 2026", status:"Verified", seller:"Circular Materials Ltd", tone:"concrete", nftTokenId:"NFT-CON-0186", nftType:"Recycled Concrete Aggregate", mintStatus:"listed", txHash:"0x9f2c41ab7e8d…d41b" },
+  { id:"LST-HK-2026-0174", passportId:"DPP-HK-2026-00417", transferId:"CBT-HK-DG-2026-0119", material:"Structural Steel Sections", category:"Steel", quantity:"84 t", location:"Kwai Tsing, Hong Kong", available:"Available now", status:"Verified", seller:"Metro Reuse Co.", tone:"steel", nftTokenId:"NFT-STL-0174", nftType:"Structural Steel Sections", mintStatus:"listed", txHash:"0x3a81be09f2c1…c8e7" },
+  { id:"LST-HK-2026-0168", passportId:"DPP-HK-2026-00396", material:"Reclaimed Timber Beams", category:"Timber", quantity:"46 t", location:"Yuen Long, Hong Kong", available:"25 Sep 2026", status:"Pending", seller:"TimberLoop Ltd", tone:"timber", nftTokenId:"NFT-TMB-0168", nftType:"Reclaimed Timber Beams", mintStatus:"minted", txHash:"0x77d0f5a31c2b…9a2d" },
+  { id:"LST-MO-2026-0062", passportId:"DPP-MO-2026-00381", transferId:"CBT-MO-ZH-2026-0042", material:"Crushed Glass Aggregate", category:"Glass", quantity:"38 t", location:"Taipa, Macau", available:"28 Sep 2026", status:"Verified", seller:"Macau Circular Works", tone:"glass", nftTokenId:"NFT-GLS-0062", nftType:"Crushed Glass Aggregate", mintStatus:"listed", txHash:"0xb4e21c08aa71…f053" },
+  { id:"LST-HK-2026-0152", passportId:"DPP-HK-2026-00372", material:"Mixed Mineral Recovery", category:"Mixed", quantity:"216 t", location:"Fanling, Hong Kong", available:"22 Sep 2026", status:"Processing", seller:"NorthLoop Resources", tone:"mixed", nftTokenId:"NFT-MXD-0152", nftType:"Mixed Mineral Recovery", mintStatus:"draft" },
+  { id:"LST-HK-2026-0149", passportId:"DPP-HK-2026-00354", transferId:"CBT-HK-FS-2026-0108", material:"Recovered Aluminium", category:"Metal", quantity:"24 t", location:"Kwai Tsing, Hong Kong", available:"Available now", status:"Verified", seller:"Urban Alloy Ltd", tone:"aluminium", nftTokenId:"NFT-ALU-0149", nftType:"Recovered Aluminium", mintStatus:"minted", txHash:"0x55c9ad3e1b40…e7a4" },
 ];
+
+const DEMANDS: Demand[] = [
+  { id:"DMD-2026-0071", company:"Guangdong Road Base Co.", industry:"Road Construction", region:"Shenzhen", category:"Concrete", quantity:"500 t", deadline:"30 Sep 2026", contact:"procurement@gdroadbase.cn" },
+  { id:"DMD-2026-0068", company:"Pearl River Precast", industry:"Precast Concrete", region:"Dongguan", category:"Concrete", quantity:"260 t", deadline:"28 Sep 2026", contact:"buyer@prprecast.cn" },
+  { id:"DMD-2026-0064", company:"Bamboo Bay Furniture", industry:"Furniture & Timber", region:"Zhuhai", category:"Timber", quantity:"60 t", deadline:"05 Oct 2026", contact:"timber@bamboobay.cn" },
+  { id:"DMD-2026-0059", company:"South China Smelter", industry:"Metal Recycling", region:"Foshan", category:"Metal", quantity:"40 t", deadline:"02 Oct 2026", contact:"offtake@scsmelter.cn" },
+  { id:"DMD-2026-0055", company:"Harbour Glassworks", industry:"Glass Manufacturing", region:"Zhuhai", category:"Glass", quantity:"50 t", deadline:"30 Sep 2026", contact:"cullet@harbourglass.cn" },
+  { id:"DMD-2026-0051", company:"Northern Metropolis Infill", industry:"Land Reclamation", region:"Hong Kong", category:"Mixed", quantity:"300 t", deadline:"10 Oct 2026", contact:"fill@nm-infill.hk" },
+];
+
+const COMPANY_KB: CompanyRecord[] = [
+  { company:"Guangdong Road Base Co.", industry:"Road construction / base layer", region:"Shenzhen", regionCode:"SZ", needs:"Recycled concrete aggregate for highway sub-base", capacity:"1,200 t/month", history:"3 completed cross-border transfers this quarter", rating:4.6 },
+  { company:"Pearl River Precast", industry:"Precast concrete elements", region:"Dongguan", regionCode:"DG", needs:"Washed RCA for precast concrete mix", capacity:"800 t/month", history:"Recurring quarterly buyer", rating:4.8 },
+  { company:"Bamboo Bay Furniture", industry:"Reclaimed timber furniture", region:"Zhuhai", regionCode:"ZH", needs:"Structural reclaimed timber beams", capacity:"150 t/month", history:"First-time buyer, proof-of-concept in progress", rating:4.1 },
+  { company:"South China Smelter", industry:"Secondary metal smelting", region:"Foshan", regionCode:"FS", needs:"Recovered aluminium scrap for remelt", capacity:"300 t/month", history:"Long-term offtake agreement", rating:4.7 },
+  { company:"Harbour Glassworks", industry:"Glass cullet processing", region:"Zhuhai", regionCode:"ZH", needs:"Crushed glass cullet for remelt", capacity:"220 t/month", history:"2 completed transfers", rating:4.4 },
+  { company:"Northern Metropolis Infill", industry:"Land reclamation / engineered fill", region:"Hong Kong", regionCode:"HK", needs:"Mixed mineral recovery for engineered fill", capacity:"2,000 t/month", history:"High-volume public works buyer", rating:4.5 },
+];
+
+const TRADES: Trade[] = [
+  { id:"TRD-2026-0031", listingId:"LST-HK-2026-0186", demandId:"DMD-2026-0071", buyer:"Guangdong Road Base Co.", seller:"Circular Materials Ltd", quantity:"320 t", price:"HK$ 48,000", status:"Completed", txHash:"0x9f2c41ab7e8d…d41b", tradedOn:"22 Sep 2026" },
+  { id:"TRD-2026-0029", listingId:"LST-HK-2026-0174", demandId:"DMD-2026-0059", buyer:"South China Smelter", seller:"Metro Reuse Co.", quantity:"84 t", price:"HK$ 96,000", status:"Completed", txHash:"0x3a81be09f2c1…c8e7", tradedOn:"19 Sep 2026" },
+  { id:"TRD-2026-0027", listingId:"LST-MO-2026-0062", demandId:"DMD-2026-0055", buyer:"Harbour Glassworks", seller:"Macau Circular Works", quantity:"38 t", price:"HK$ 21,000", status:"Settled", txHash:"0xb4e21c08aa71…f053", tradedOn:"15 Sep 2026" },
+  { id:"TRD-2026-0024", listingId:"LST-HK-2026-0152", demandId:"DMD-2026-0051", buyer:"Northern Metropolis Infill", seller:"NorthLoop Resources", quantity:"216 t", price:"HK$ 32,000", status:"In Progress", txHash:"0x88c3…pending", tradedOn:"21 Sep 2026" },
+];
+
+function regionCodeOf(location: string): string {
+  if (location.includes("Hong Kong")) return "HK";
+  if (location.includes("Macau")) return "MO";
+  if (location.includes("Shenzhen")) return "SZ";
+  if (location.includes("Dongguan")) return "DG";
+  if (location.includes("Zhuhai")) return "ZH";
+  if (location.includes("Foshan")) return "FS";
+  return location;
+}
+
+function buildMatches(): Match[] {
+  const matches: Match[] = [];
+  LISTINGS.forEach((listing) => {
+    DEMANDS.forEach((demand) => {
+      const kb = COMPANY_KB.find((c) => c.company === demand.company);
+      const reasons: string[] = [];
+      let score = 0;
+      if (listing.category.toLowerCase() === demand.category.toLowerCase()) {
+        score += 40; reasons.push(`Category match: ${listing.category}`);
+      } else {
+        score += 4; reasons.push(`Nearby category: ${listing.category} vs ${demand.category}`);
+      }
+      const lRegion = regionCodeOf(listing.location);
+      const dRegion = regionCodeOf(demand.region);
+      if (lRegion === dRegion) { score += 25; reasons.push(`Region proximity: ${demand.region}`); }
+      else { score += 12; reasons.push(`Cross-border reachable: ${lRegion} → ${dRegion}`); }
+      const lq = parseInt(listing.quantity, 10) || 0;
+      const dq = parseInt(demand.quantity, 10) || 0;
+      if (lq && dq) {
+        if (lq <= dq) { score += 20; reasons.push(`Quantity fits: ${listing.quantity} ≤ ${demand.quantity}`); }
+        else { score += 6; reasons.push(`Quantity partial: ${listing.quantity} exceeds ${demand.quantity}`); }
+      }
+      const rating = kb?.rating ?? 4;
+      score += Math.round(rating * 3);
+      reasons.push(`Buyer rating: ${rating.toFixed(1)}/5`);
+      if (kb) reasons.push(`RAG · ${kb.company} — ${kb.needs}`);
+      score = Math.min(100, score);
+      if (score >= 55) {
+        matches.push({ id:`MCH-${listing.id.slice(4)}-${demand.id.slice(4)}`, listingId: listing.id, demandId: demand.id, score, reasons, matchedOn:"26 Sep 2026" });
+      }
+    });
+  });
+  return matches.sort((a, b) => b.score - a.score);
+}
+
+const MATCHES: Match[] = buildMatches();
+
+function summaryStats() {
+  const minted = LISTINGS.filter((l) => l.mintStatus !== "draft").length;
+  const avgScore = MATCHES.length ? Math.round(MATCHES.reduce((s, m) => s + m.score, 0) / MATCHES.length) : 0;
+  const settled = TRADES.filter((t) => t.status !== "In Progress").length;
+  const catCount: Record<string, number> = {};
+  DEMANDS.forEach((d) => { catCount[d.category] = (catCount[d.category] || 0) + 1; });
+  const regCount: Record<string, number> = {};
+  DEMANDS.forEach((d) => { regCount[d.region] = (regCount[d.region] || 0) + 1; });
+  const topCategories = Object.entries(catCount).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
+  const topRegions = Object.entries(regCount).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
+  return { minted, matches: MATCHES.length, avgScore, demands: DEMANDS.length, settled, trades: TRADES.length, topCategories, topRegions };
+}
+
+const randomHex = (len: number) => Array.from({ length: len }, () => Math.floor(Math.random() * 16).toString(16)).join("");
 
 const PASSPORT_TIMELINE = [
   ["Generated", "03 Sep 2026", "Kai Tak", "Gammon Construction", "done"],
@@ -70,7 +177,7 @@ const TRANSFER_TIMELINE = [
 function statusClass(status: string) {
   const value = status.toLowerCase();
   if (value.includes("verified") || value.includes("cleared")) return "verified";
-  if (value.includes("complete")) return "completed";
+  if (value.includes("complete") || value.includes("settled")) return "completed";
   if (value.includes("pending") || value.includes("preparing")) return "pending";
   if (value.includes("issue") || value.includes("expired")) return "issue";
   return "processing";
@@ -174,7 +281,7 @@ export default function CwPlatform() {
   }, [search, listingFilter]);
 
   const exportData = () => {
-    const rows = view.startsWith("crossborder") ? TRANSFERS : view.startsWith("listing") ? LISTINGS : PASSPORTS;
+    const rows = view === "match-trades" ? TRADES : view.startsWith("crossborder") ? TRANSFERS : view.startsWith("listing") ? LISTINGS : PASSPORTS;
     const csv = [Object.keys(rows[0]).join(","), ...rows.map((row) => Object.values(row).map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const anchor = document.createElement("a");
@@ -208,6 +315,9 @@ export default function CwPlatform() {
     { label:"MARKETPLACE", items:[
       { code:"SL", label:"Seller Listings", zh:"賣方刊登", target:"listings" },
       { code:"LD", label:"Listing Details", zh:"刊登詳情", target:"listing-detail" },
+    ]},
+    { label:"AI MATCHING", items:[
+      { code:"MT", label:"Match & Trades", zh:"撮合與交易", target:"match-trades" },
     ]},
   ];
 
@@ -256,6 +366,7 @@ export default function CwPlatform() {
             {view === "crossborder-detail" && <CrossborderDetail L={L} navigate={navigate} openPassport={openPassport} />}
             {view === "listings" && <SellerListings L={L} data={filteredListings} filter={listingFilter} setFilter={setListingFilter} mode={listingMode} setMode={setListingMode} setSearch={setSearch} openPassport={openPassport} navigate={navigate} />}
             {view === "listing-detail" && <ListingDetail L={L} navigate={navigate} openPassport={openPassport} />}
+            {view === "match-trades" && <MatchTradesView L={L} navigate={navigate} />}
           </>}
           <footer><span>CW Passport · Construction Waste Digital Infrastructure</span><span>One Material → One Digital Passport → One Traceable Lifecycle</span></footer>
         </div>
@@ -315,7 +426,7 @@ function AuthScreen({ view, setView, lang, setLang, L, onSuccess }: { view: Excl
   return <main className="auth-shell">
     <section className="auth-story">
       <div className="auth-brand"><span className="brand-mark"><i /><b>CW</b></span><div><strong>CW Passport</strong><small>Construction Waste Intelligence Platform</small></div></div>
-      <div className="auth-copy"><p className="eyebrow">TRUSTED MATERIAL INFRASTRUCTURE</p><h1>{L("One material. One digital identity. A traceable lifecycle.", "一種材料，一個數碼身份，一條可追溯生命週期。")}</h1><p>{L("Connect construction material identity, cross-border movement and B2B resource listings through one trusted data layer.", "以可信資料層連接建築材料身份、跨境流動與 B2B 資源刊登。")}</p></div>
+      <div className="auth-copy"><p className="eyebrow">TRUSTED MATERIAL INFRASTRUCTURE</p><h1>{L("One material. One digital identity. ", "一種材料，一個數碼身份，")}<em>{L("A traceable lifecycle.", "一條可追溯生命週期。")}</em></h1><p>{L("Connect construction material identity, cross-border movement and B2B resource listings through one trusted data layer.", "以可信資料層連接建築材料身份、跨境流動與 B2B 資源刊登。")}</p></div>
       <div className="auth-flow"><div><span>01</span><strong>Material</strong><small>Identity</small></div><i>→</i><div><span>02</span><strong>Passport</strong><small>Verification</small></div><i>→</i><div><span>03</span><strong>Movement</strong><small>Traceability</small></div><i>→</i><div><span>04</span><strong>Marketplace</strong><small>Reuse</small></div></div>
       <p className="auth-foot">Digital Passport · Traceability · Cross-border Data · Circular Economy</p>
     </section>
@@ -329,7 +440,7 @@ function AuthScreen({ view, setView, lang, setLang, L, onSuccess }: { view: Excl
         {view === "login" && <><label>{L("Username", "帳戶名稱")}<input value={form.username} onChange={(event) => update("username", event.target.value)} placeholder="demo" required /></label><label>{L("Password", "密碼")}<input type="password" value={form.password} onChange={(event) => update("password", event.target.value)} placeholder="demo1234" required /></label><div className="form-between"><button type="button" className="text-btn" onClick={() => setView("register")}>{L("Register account", "註冊帳戶")}</button><button type="button" className="text-btn" onClick={() => setView("forgot")}>{L("Forgot password?", "忘記密碼？")}</button></div></>}
         {view === "register" && <><div className="form-row"><label>{L("Username", "帳戶名稱")}<input value={form.username} onChange={(event) => update("username", event.target.value)} required /></label><label>{L("Email", "電子郵件")}<input type="email" value={form.email} onChange={(event) => update("email", event.target.value)} required /></label></div><div className="form-row"><label>{L("Password", "密碼")}<input type="password" value={form.password} onChange={(event) => update("password", event.target.value)} required /><small className={`strength s${passwordScore}`}>{L(["Password strength","Weak","Fair","Good","Strong"][passwordScore], ["密碼強度","弱","一般","良好","強"][passwordScore])}</small></label><label>{L("Confirm password", "確認密碼")}<input type="password" value={form.confirm} onChange={(event) => update("confirm", event.target.value)} required /></label></div><label>{L("Company / Organisation", "企業／機構名稱")}<input value={form.company} onChange={(event) => update("company", event.target.value)} required /></label><div className="form-row"><label>{L("User type", "使用者類型")}<select value={form.userType} onChange={(event) => update("userType", event.target.value)} required><option value="">{L("Select type", "選擇類型")}</option><option>Construction Waste Generator</option><option>Transporter</option><option>Processing / Disposal Unit</option><option>Regulatory Agency</option><option>Other</option></select></label><label>{L("Contact person", "聯絡人")}<input value={form.contact} onChange={(event) => update("contact", event.target.value)} /></label></div><label>{L("Phone number", "手機號碼")}<input value={form.phone} onChange={(event) => update("phone", event.target.value)} placeholder="+852 0000 0000" /></label><button type="button" className="text-btn back-link" onClick={() => setView("login")}>← {L("Back to sign in", "返回登入")}</button></>}
         {view === "forgot" && <><label>{L("Username or email", "帳戶名稱或電子郵件")}<input value={form.identifier} onChange={(event) => update("identifier", event.target.value)} required /></label><button type="button" className="text-btn back-link" onClick={() => setView("login")}>← {L("Back to sign in", "返回登入")}</button></>}
-        <button className="primary-btn full auth-submit" disabled={busy}>{busy ? L("Please wait...", "請稍候...") : view === "login" ? L("Sign in", "登入") : view === "register" ? L("Register account", "註冊帳戶") : L("Prepare reset link", "準備重設連結")}</button>
+        <button className="primary-btn full auth-submit" disabled={busy}>{busy ? L("Please wait...", "請稍候...") : view === "login" ? <>{L("Sign in", "登入")} →</> : view === "register" ? L("Register account", "註冊帳戶") : L("Prepare reset link", "準備重設連結")}</button>
         {view === "login" && <div className="demo-note"><span>DEMO</span><p>{L("Use demo / demo1234 to review the complete platform.", "使用 demo / demo1234 檢視完整平台。")}</p></div>}
       </form>
     </section>
@@ -403,14 +514,43 @@ function SellerListings({ L, data, filter, setFilter, mode, setMode, setSearch, 
   return <><PageHeader eyebrow={L("MARKETPLACE / SELLER LISTINGS", "資源市場／賣方刊登")} title={L("Seller Listings", "賣方刊登")} subtitle={L("Discover available construction waste and recovered materials.", "探索可用的建築廢棄物及再生材料。")} actions={<div className="view-toggle"><button className={mode === "grid" ? "active" : ""} onClick={() => setMode("grid")}>GRID</button><button className={mode === "table" ? "active" : ""} onClick={() => setMode("table")}>TABLE</button></div>} />
     <section className="market-search-panel"><label><span>⌕</span><input placeholder={L("Search available materials...", "搜尋可用材料...")} onChange={(event) => setSearch(event.target.value)} /></label><select value={filter} onChange={(event) => setFilter(event.target.value)}><option>All materials</option><option>Concrete</option><option>Steel</option><option>Timber</option><option>Glass</option><option>Mixed</option><option>Metal</option></select><select><option>Any quantity</option><option>Under 50 t</option><option>50–200 t</option><option>Over 200 t</option></select><select><option>All locations</option><option>Hong Kong</option><option>Macau</option></select><select><option>Any availability</option><option>Available now</option><option>Upcoming</option></select><select><option>Any verification</option><option>Verified</option><option>Pending</option></select></section>
     <div className="listing-summary"><p><strong>{data.length}</strong> {L("material listings", "項材料刊登")} <span>·</span> {L("B2B resource availability", "B2B 資源供應")}</p>{filter !== "All materials" && <button className="filter-chip" onClick={() => setFilter("All materials")}>{filter} ×</button>}</div>
-    {data.length ? mode === "grid" ? <section className="listing-grid">{data.map((item) => <article className="listing-card" key={item.id}><MaterialThumb tone={item.tone} large /><div className="listing-card-body"><div className="listing-card-top"><span className="listing-category">{item.category}</span><StatusBadge status={item.status} /></div><h2>{item.material}</h2><span className="listing-id">{item.id}</span><dl><div><dt>Quantity</dt><dd>{item.quantity}</dd></div><div><dt>Location</dt><dd>{item.location}</dd></div><div><dt>Available</dt><dd>{item.available}</dd></div></dl><div className="passport-strip"><span>DP</span><div><small>Digital Passport</small><PassportLink id={item.passportId} onOpen={openPassport} /></div></div><div className="seller-line"><div><small>SELLER / ORGANISATION</small><strong>{item.seller}</strong></div><button className="secondary-btn" onClick={() => navigate("listing-detail")}>{L("View Details", "查看詳情")} →</button></div></div></article>)}</section> : <section className="panel"><div className="table-scroll"><table><thead><tr><th>Listing</th><th>Material</th><th>Category</th><th>Quantity</th><th>Location</th><th>Availability</th><th>Passport</th><th>Status</th><th></th></tr></thead><tbody>{data.map((item) => <tr key={item.id}><td className="mono-id">{item.id}</td><td><strong>{item.material}</strong></td><td>{item.category}</td><td>{item.quantity}</td><td>{item.location}</td><td>{item.available}</td><td><PassportLink id={item.passportId} onOpen={openPassport} /></td><td><StatusBadge status={item.status} /></td><td><button className="text-btn" onClick={() => navigate("listing-detail")}>View →</button></td></tr>)}</tbody></table></div></section> : <EmptyState L={L} onClear={() => { setFilter("All materials"); setSearch(""); }} />}
+    {data.length ? mode === "grid" ? <section className="listing-grid">{data.map((item) => <article className="listing-card" key={item.id}><MaterialThumb tone={item.tone} large /><div className="listing-card-body"><div className="listing-card-top"><span className="listing-category">{item.category}</span><StatusBadge status={item.status} /></div><h2>{item.material}</h2><span className="listing-id">{item.id}</span><span className={`nft-chip ${item.mintStatus}`}>◈ {item.nftTokenId}</span><dl><div><dt>Quantity</dt><dd>{item.quantity}</dd></div><div><dt>Location</dt><dd>{item.location}</dd></div><div><dt>Available</dt><dd>{item.available}</dd></div></dl><div className="passport-strip"><span>DP</span><div><small>Digital Passport</small><PassportLink id={item.passportId} onOpen={openPassport} /></div></div><div className="seller-line"><div><small>SELLER / ORGANISATION</small><strong>{item.seller}</strong></div><button className="secondary-btn" onClick={() => navigate("listing-detail")}>{L("View Details", "查看詳情")} →</button></div></div></article>)}</section> : <section className="panel"><div className="table-scroll"><table><thead><tr><th>Listing</th><th>Material</th><th>Category</th><th>Quantity</th><th>Location</th><th>Availability</th><th>Passport</th><th>Status</th><th></th></tr></thead><tbody>{data.map((item) => <tr key={item.id}><td className="mono-id">{item.id}</td><td><strong>{item.material}</strong></td><td>{item.category}</td><td>{item.quantity}</td><td>{item.location}</td><td>{item.available}</td><td><PassportLink id={item.passportId} onOpen={openPassport} /></td><td><StatusBadge status={item.status} /></td><td><button className="text-btn" onClick={() => navigate("listing-detail")}>View →</button></td></tr>)}</tbody></table></div></section> : <EmptyState L={L} onClear={() => { setFilter("All materials"); setSearch(""); }} />}
   </>;
 }
 
 function ListingDetail({ L, navigate, openPassport }: { L:L; navigate:(view:View)=>void; openPassport:(id:string)=>void }) {
   const [tab, setTab] = useState("Overview");
+  const [listing] = useState<Listing>(LISTINGS[0]);
+  const [mintStep, setMintStep] = useState(0);
+  const [txHash, setTxHash] = useState("");
   const tabs = ["Overview","Material Information","Source","Processing Information","Digital Passport","Seller Information"];
-  return <><div className="breadcrumbs"><button onClick={() => navigate("listings")}>{L("Marketplace", "資源市場")}</button><span>/</span><button onClick={() => navigate("listings")}>{L("Seller Listings", "賣方刊登")}</button><span>/</span><strong>LST-HK-2026-0186</strong></div>
+  const mintStages = [
+    { en:"Draft — ready to mint", zh:"待上鏈 — 準備鑄造" },
+    { en:"Minted on-chain", zh:"已上鏈鑄造" },
+    { en:"Listed on platform", zh:"已上架進平台" },
+  ];
+  const advanceMint = () => {
+    if (mintStep >= 2) return;
+    if (mintStep === 0) setTxHash(`0x${randomHex(10)}…${randomHex(4)}`);
+    setMintStep((step) => Math.min(2, step + 1));
+  };
+  return <><div className="breadcrumbs"><button onClick={() => navigate("listings")}>{L("Marketplace", "資源市場")}</button><span>/</span><button onClick={() => navigate("listings")}>{L("Seller Listings", "賣方刊登")}</button><span>/</span><strong>{listing.nftTokenId}</strong></div>
+    <section className="panel nft-passport">
+      <div className="nft-head"><div><p className="eyebrow">NFT PASSPORT · ON-CHAIN MATERIAL IDENTITY</p><h2>{L("NFT Passport", "NFT 護照")}</h2><p>{L("Each seller listing is minted as an NFT passport — token ID, type and photo — recorded on-chain before entering the platform.", "每件賣家刊登都鑄造為 NFT 護照 — 含編號、類型與照片 — 上鏈後才進入平台。")}</p></div><StatusBadge status={mintStep === 0 ? "Processing" : mintStep === 1 ? "Verified" : "Completed"} /></div>
+      <div className="nft-body">
+        <div className="nft-photo"><MaterialThumb tone={listing.tone} large /><span className="nft-token-label">TOKEN ID</span><span className="nft-token-id">{listing.nftTokenId}</span></div>
+        <div className="nft-facts">
+          <dl className="listing-facts">
+            <div><dt>{L("Token ID", "編號")}</dt><dd className="mono-id">{listing.nftTokenId}</dd></div>
+            <div><dt>{L("Type", "類型")}</dt><dd>{listing.nftType}</dd></div>
+            <div><dt>{L("Photo", "照片")}</dt><dd>{L("On-chain · IPFS", "已上鏈 · IPFS")}</dd></div>
+            <div><dt>{L("Tx Hash", "交易哈希")}</dt><dd className="mono-id">{txHash || "—"}</dd></div>
+          </dl>
+          <div className="mint-stages">{mintStages.map((stage, index) => <div className={`mint-stage ${index < mintStep ? "done" : index === mintStep ? "current" : ""}`} key={stage.en}><span>{index < mintStep ? "✓" : index + 1}</span><div><strong>{L(stage.en, stage.zh)}</strong></div>{index < mintStages.length - 1 && <i />}</div>)}</div>
+          <div className="mint-actions"><button className="primary-btn" onClick={advanceMint} disabled={mintStep >= 2}>{mintStep === 0 ? L("Mint to blockchain", "上鏈鑄造") : mintStep === 1 ? L("List on platform", "上架進平台") : L("Already on platform", "已在平台上")} →</button>{mintStep > 0 && <button className="text-btn" onClick={() => { setMintStep(0); setTxHash(""); }}>{L("Replay demo", "重播演示")} ↺</button>}</div>
+        </div>
+      </div>
+    </section>
     <section className="panel listing-hero"><div className="material-gallery"><MaterialThumb tone="concrete" large /><div className="gallery-thumbs"><button className="active"><MaterialThumb tone="concrete" /></button><button><MaterialThumb tone="concrete-alt" /></button><button><MaterialThumb tone="aggregate" /></button></div></div><div className="listing-info"><div className="listing-title-row"><div><p className="eyebrow">LST-HK-2026-0186 · VERIFIED MATERIAL</p><h1>Recycled Concrete Aggregate</h1><p>Recovered construction material for qualified reuse applications.</p></div><StatusBadge status="Verified" /></div><dl className="listing-facts"><div><dt>Material Category</dt><dd>Concrete</dd></div><div><dt>Available Quantity</dt><dd>320 t</dd></div><div><dt>Current Location</dt><dd>EcoPark, Tuen Mun</dd></div><div><dt>Available From</dt><dd>20 Sep 2026</dd></div><div><dt>Seller / Organisation</dt><dd>Circular Materials Ltd</dd></div><div><dt>Digital Passport</dt><dd><StatusBadge status="Verified" /></dd></div></dl><button className="primary-btn passport-cta" onClick={() => openPassport("DPP-HK-2026-00428")}><span>DP</span>{L("View Digital Passport", "查看數碼護照")} <b>→</b></button></div></section>
     <section className="panel detail-tabs listing-tabs"><div className="tabs" role="tablist">{tabs.map((item) => <button key={item} role="tab" aria-selected={tab === item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</div><div className="tab-content">{tab === "Overview" ? <div className="listing-overview"><div><PanelHead title={L("Material Overview", "材料總覽")} /><p>Processed recycled concrete aggregate associated with a verified material passport and recorded source project. Current availability and location are presented for B2B resource discovery.</p><dl className="structured-list"><div><dt>Source Project</dt><dd>Kai Tak Redevelopment</dd></div><div><dt>Processing Facility</dt><dd>EcoPark Processing Facility</dd></div><div><dt>Recorded Quantity</dt><dd>320 t</dd></div><div><dt>Availability</dt><dd>20 Sep 2026</dd></div></dl></div><div><PanelHead title={L("Connected Data Objects", "關聯資料物件")} /><div className="relationship-stack"><button onClick={() => openPassport("DPP-HK-2026-00428")}><span>DP</span><div><small>Digital Passport</small><strong>DPP-HK-2026-00428</strong></div><b>→</b></button><button onClick={() => navigate("crossborder-detail")}><span>CB</span><div><small>Cross-border Record</small><strong>CBT-HK-SZ-2026-0128</strong></div><b>→</b></button></div></div></div> : <ListingTab tab={tab} L={L} openPassport={openPassport} />}</div></section>
     <section className="panel traceability-panel"><PanelHead title={L("Material Traceability", "材料追溯")} subtitle={L("Source, processing and current location", "來源、處理及目前位置")} /><div className="trace-route"><div><span>01</span><small>SOURCE PROJECT</small><strong>Kai Tak Redevelopment</strong><p>Hong Kong · Generated 03 Sep</p></div><i>→</i><div><span>02</span><small>PROCESSING FACILITY</small><strong>EcoPark Processing Facility</strong><p>Tuen Mun · Processed 12 Sep</p></div><i>→</i><div><span>03</span><small>CURRENT LOCATION</small><strong>Tuen Mun Storage Yard</strong><p>Available from 20 Sep</p></div></div></section>
@@ -427,6 +567,58 @@ function ListingTab({ tab, L, openPassport }: { tab:string; L:L; openPassport:(i
     "Seller Information":[["Organisation","Circular Materials Ltd"],["Listing ID","LST-HK-2026-0186"],["Location","Tuen Mun, Hong Kong"],["Availability","20 Sep 2026"]],
   };
   return <div className="tab-record"><div><p className="eyebrow">{tab.toUpperCase()}</p><h3>{L("Listing information", "刊登資料")}</h3><p>{L("Existing material and organisation fields are grouped for review.", "現有材料及機構欄位已分組顯示，方便審閱。")}</p>{tab === "Digital Passport" && <button className="text-btn tab-link" onClick={() => openPassport("DPP-HK-2026-00428")}>{L("Open passport preview", "開啟護照預覽")} →</button>}</div><dl className="structured-list wide">{rows[tab].map(([key,value]) => <div key={key}><dt>{key}</dt><dd className={value.startsWith("DPP") ? "mono-id" : ""}>{value}</dd></div>)}</dl></div>;
+}
+
+function MatchTradesView({ L, navigate }: { L:L; navigate:(view:View)=>void }) {
+  const stats = summaryStats();
+  const topMatches = MATCHES.slice(0, 6);
+  const kpis: [string,string,string,string][] = [
+    ["NFT Passports Minted", String(stats.minted), `of ${LISTINGS.length} listings`, "NF"],
+    ["Active AI Matches", String(stats.matches), `avg ${stats.avgScore}% score`, "MC"],
+    ["Buyer Demands", String(stats.demands), "live demand sources", "DM"],
+    ["Completed Trades", String(stats.settled), `of ${stats.trades} records`, "TR"],
+  ];
+  return <>
+    <PageHeader eyebrow={L("AI MATCHING / TRADE DESK", "AI 撮合／交易台")} title={L("Match & Trades", "撮合與交易")} subtitle={L("The AI agent matches seller NFT passports to buyer demand, with the matching design, transaction records and data insights in one desk.", "AI 代理將賣家 NFT 護照與買家需求撮合，並在此集中展示匹配設計、交易記錄與數據洞察。")} actions={<div className="network-status"><span />{L("AI matching engine online", "AI 撮合引擎運作中")} <strong>98.2%</strong></div>} />
+    <section className="kpi-grid four" aria-label="Match and trade metrics">{kpis.map(([label,value,trend,code]) => <article className="kpi-card" key={label}><div className="kpi-top"><span className="mini-icon">{code}</span><span className="trend">↗ live</span></div><strong>{value}</strong><p>{label}</p><small>{trend}</small></article>)}</section>
+    <section className="panel insight-panel">
+      <PanelHead title={L("Demand Data Summary", "需求數據匯總")} subtitle={L("Buyer demand concentration by category and region", "按品類與地區的買方需求分佈")} />
+      <div className="insight-split">
+        <div><p className="insight-label">{L("Top categories", "熱門品類")}</p>{stats.topCategories.map((c) => <div className="bar-row" key={c.name}><p>{c.name}</p><div className="bar"><i style={{ width: `${(c.count / (stats.topCategories[0]?.count || 1)) * 100}%` }} /></div><strong>{c.count}</strong></div>)}</div>
+        <div><p className="insight-label">{L("Top regions", "熱門地區")}</p>{stats.topRegions.map((r) => <div className="bar-row" key={r.name}><p>{r.name}</p><div className="bar"><i style={{ width: `${(r.count / (stats.topRegions[0]?.count || 1)) * 100}%` }} /></div><strong>{r.count}</strong></div>)}</div>
+      </div>
+    </section>
+    <section className="panel match-design-panel">
+      <PanelHead title={L("How the AI Agent Matches", "AI 代理如何撮合")} subtitle={L("Two-stage pipeline: recommendation scoring, then RAG retrieval for buyer evidence", "兩段式管線：先推薦評分，再以 RAG 檢索買方證據")} action={<span className="alert-count">{stats.matches} {L("matches", "項撮合")}</span>} />
+      <div className="match-pipeline">
+        <div className="pipeline-stage"><span className="pipeline-num">01</span><div><strong>{L("Recommendation System", "推薦系統")}</strong><p>{L("Content-based scoring over category, region, quantity and buyer rating.", "基於品類、地區、數量與買方評級的內容式評分。")}</p></div></div>
+        <i>→</i>
+        <div className="pipeline-stage"><span className="pipeline-num">02</span><div><strong>{L("RAG Retrieval", "RAG 檢索")}</strong><p>{L("Grounds each match with the buyer company's profile and procurement needs.", "以買方公司檔案與採購需求為每條撮合提供證據。")}</p></div></div>
+      </div>
+      <div className="score-key"><span>+40</span>{L("category", "品類")}<span>+25</span>{L("region", "地區")}<span>+20</span>{L("quantity", "數量")}<span>+15</span>{L("rating", "評級")}</div>
+      <div className="match-list">{topMatches.map((match) => {
+        const listing = LISTINGS.find((l) => l.id === match.listingId)!;
+        const demand = DEMANDS.find((d) => d.id === match.demandId)!;
+        return <div className="match-row" key={match.id}>
+          <div className="match-score"><strong>{match.score}</strong><small>match</small></div>
+          <div className="match-pair">
+            <div className="match-side"><span className="match-tag sell">NFT</span><div><small>SELLER · {listing.seller}</small><strong>{listing.material}</strong><span className="mono-id">{listing.nftTokenId}</span></div></div>
+            <b>↔</b>
+            <div className="match-side"><span className="match-tag buy">BUY</span><div><small>BUYER · {demand.company}</small><strong>{demand.industry}</strong><span className="mono-id">{demand.region}</span></div></div>
+          </div>
+          <ul className="match-reasons">{match.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+        </div>;
+      })}</div>
+    </section>
+    <section className="panel trade-panel">
+      <PanelHead title={L("Buyer & Seller Transaction Records", "買賣雙方交易記錄")} subtitle={L("Settled and in-progress trades between matched parties", "買賣雙方已結算與進行中的交易")} action={<button className="secondary-btn compact" onClick={() => navigate("listings")}>{L("Browse listings", "瀏覽刊登")} →</button>} />
+      <div className="table-scroll"><table><thead><tr><th>Trade ID</th><th>NFT / Listing</th><th>Buyer</th><th>Seller</th><th>Quantity</th><th>Price</th><th>Status</th><th>Tx Hash</th><th>Date</th></tr></thead>
+      <tbody>{TRADES.map((trade) => {
+        const listing = LISTINGS.find((l) => l.id === trade.listingId)!;
+        return <tr key={trade.id} onClick={() => navigate("listing-detail")}><td className="mono-id">{trade.id}</td><td><button className="id-link" onClick={() => navigate("listing-detail")}>{listing.nftTokenId}</button></td><td><strong>{trade.buyer}</strong></td><td>{trade.seller}</td><td><strong>{trade.quantity}</strong></td><td>{trade.price}</td><td><StatusBadge status={trade.status} /></td><td className="mono-id">{trade.txHash ?? "—"}</td><td>{trade.tradedOn}</td></tr>;
+      })}</tbody></table></div>
+    </section>
+  </>;
 }
 
 function RelationRail({ navigate, active }: { navigate:(view:View)=>void; active:"passport"|"movement"|"marketplace" }) {

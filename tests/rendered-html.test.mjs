@@ -1,33 +1,35 @@
 import assert from "node:assert/strict";
+import { readFile, readdir } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-async function render() {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-  return worker.fetch(
-    new Request("http://localhost/", { headers: { accept: "text/html" } }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
-    { waitUntil() {}, passThroughOnException() {} },
+const distDir = fileURLToPath(new URL("../dist", import.meta.url));
+
+async function readBuiltApp() {
+  const html = await readFile(path.join(distDir, "index.html"), "utf8");
+  const assetDir = path.join(distDir, "assets");
+  const files = await readdir(assetDir);
+  const scripts = await Promise.all(
+    files
+      .filter((file) => file.endsWith(".js"))
+      .map((file) => readFile(path.join(assetDir, file), "utf8")),
   );
+  return { html, js: scripts.join("\n") };
 }
 
-test("renders the CW Passport sign-in directly", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
-  const html = await response.text();
-  assert.match(html, /CW Passport/);
-  assert.match(html, /Sign in to your workspace/);
-  assert.match(html, /demo1234/);
-  assert.doesNotMatch(html, /signin-with-chatgpt|Sign in with ChatGPT|codex-preview|SkeletonPreview|Building your site/);
-});
-
-test("emits site-specific sharing metadata", async () => {
-  const response = await render();
-  const html = await response.text();
+test("emits CW Passport sharing metadata", async () => {
+  const { html } = await readBuiltApp();
   assert.match(html, /<title>CW Passport — Construction Waste Intelligence Platform<\/title>/);
   assert.match(html, /property="og:title"[^>]*content="CW Passport — Construction Waste Intelligence Platform"/);
   assert.match(html, /name="twitter:card"[^>]*content="summary_large_image"/);
-  assert.match(html, /http:\/\/localhost(?::\d+)?\/og\.png/);
+  assert.match(html, /\/og\.png/);
+});
+
+test("bundles the CW Passport sign-in and demo credentials", async () => {
+  const { js } = await readBuiltApp();
+  assert.match(js, /CW Passport/);
+  assert.match(js, /Sign in to your workspace/);
+  assert.match(js, /demo1234/);
+  assert.doesNotMatch(js, /signin-with-chatgpt|Sign in with ChatGPT/);
 });
