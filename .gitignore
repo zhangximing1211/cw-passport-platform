@@ -39,3 +39,5 @@ yarn-error.log*
 /outputs/
 /work/
 *.tsbuildinfo
+
+/tests/e2e-shots/

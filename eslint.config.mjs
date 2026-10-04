@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "node_modules/**",
+    ".wrangler/**",
+    "worker-configuration.d.ts",
   ]),
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
@@ -25,6 +27,10 @@ const eslintConfig = defineConfig([
         ...globals.browser,
         ...globals.node,
       },
+    },
+    rules: {
+      // `const { secret: _secret, ...rest } = row` is how we drop fields from API responses.
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", ignoreRestSiblings: true }],
     },
     settings: {
       react: {

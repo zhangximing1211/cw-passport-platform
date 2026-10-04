@@ -131,17 +131,72 @@ npm ci
 
 ## 5. 本地开发运行
 
-启动开发服务器：
+首次运行（或数据库结构有变更）时，先初始化本地 D1 数据库（执行迁移并写入演示数据）：
+
+```bash
+npm run db:setup
+```
+
+启动开发服务器（同时启动前端 Vite `:3000` 和后端 Worker API `:8787`）：
 
 ```bash
 npm run dev
 ```
 
-终端会打印实际 Local URL，通常为：
+浏览器打开：
 
 ```text
 http://localhost:3000
 ```
+
+前端对 `/api/*` 的请求由 Vite 代理到 `wrangler dev`。只想启动其中一端时，可用 `npm run dev:web` 或 `npm run dev:api`。后端未启动时，护照登记册会显示「Backend API is offline」，并回退到内置演示数据。
+
+后端结构：
+
+```text
+worker/index.ts          # Hono 入口：挂载路由、登录校验、CSRF、错误处理
+worker/routes/           # auth、passports、transfers、listings、marketplace（demands/matches/trades）、stats
+worker/services/         # 业务逻辑（撮合评分）
+worker/middleware/       # requireAuth / requireRole、JSON 写入校验（CSRF）
+worker/lib/              # 密码哈希、会话、分页与搜索工具
+worker/db/schema.ts      # Drizzle 表定义；修改后运行 npm run db:generate 生成迁移
+worker/test/             # Vitest 测试（在 Workers 运行时中执行）
+migrations/              # D1 迁移 SQL（由 drizzle-kit 生成）
+scripts/generate-seed.mjs# 生成模拟数据 → seed/demo.sql
+shared/api.ts            # 前后端共享的类型
+src/api/                 # 前端 API 客户端
+```
+
+数据库命令：
+
+| 命令 | 作用 |
+| --- | --- |
+| `npm run db:setup` | 执行迁移并写入模拟数据 |
+| `npm run db:reset` | 重新生成模拟数据并重置业务表（已注册的用户会保留；本地 R2 中的旧文件不会被删除） |
+| `npm run db:generate` | 修改 `worker/db/schema.ts` 后生成新的迁移文件 |
+| `npm run db:query -- "SQL"` | 对本地数据库执行一条 SQL，例如 `npm run db:query -- "SELECT id, stage FROM passports LIMIT 5"` |
+| `npm run db:path` | 显示本地数据库文件的位置 |
+| `npm run test:api` | 只运行后端测试 |
+| `npm run test:e2e` | 用浏览器（Edge）把完整业务流程点一遍，需先运行 `npm run dev`；会写入测试数据，跑完后用 `npm run db:reset` 恢复 |
+
+### 接口文档
+
+- 完整接口说明：[docs/API.md](docs/API.md)（每个接口的权限、参数、业务规则和错误码）
+- 手动调用：VS Code 安装 REST Client 扩展，打开 [docs/api.http](docs/api.http) 逐条点击「Send Request」
+- 类型定义：[shared/api.ts](shared/api.ts)
+- 后端代码：[worker/routes/](worker/routes/)
+
+### 查看数据库
+
+本地数据库是一个 SQLite 文件，由 `wrangler dev` 管理，位于 `.wrangler/state/v3/d1/` 下（`npm run db:path` 显示完整路径）。
+
+1. **命令行（实时数据）**：`npm run db:query -- "SELECT * FROM passports LIMIT 10"`。开发服务器运行中也能用。
+2. **图形界面**：在 VS Code 安装扩展 **SQLite Viewer**（作者 Florian Klampfer），然后在资源管理器中打开 `npm run db:path` 显示的 `.sqlite` 文件即可浏览所有表。该扩展直接读文件，开发服务器运行时刚写入的数据可能还没合并进主文件；看不到最新数据时，先停止 `npm run dev` 再打开。也可以用桌面软件 [DB Browser for SQLite](https://sqlitebrowser.org/)。
+3. **表结构**：以 [worker/db/schema.ts](worker/db/schema.ts) 为准，迁移 SQL 在 [migrations/](migrations/)。
+
+主要数据表：`users`、`sessions`、`passports`、`passport_events`、`transfers`、`transfer_events`、`listings`、`demands`、`companies`、`trades`、`documents`（文件本身在 R2）、`notifications`、`audit_logs`、`id_sequences`、`login_attempts`、`password_reset_tokens`。
+
+> 本机访问官方 npm 源不稳定时，安装依赖请加 `--registry=https://registry.npmmirror.com`。
 
 在浏览器打开该地址即可。修改 `app/` 或 `src/` 下的代码后，开发服务器会自动重新编译。
 
@@ -244,7 +299,9 @@ npm test
 ```text
 cw-passport-platform/
 ├── app/
-│   ├── CwPlatform.tsx         # 七个业务视图、演示数据和前端交互
+│   ├── CwPlatform.tsx         # 外壳：登录、导航、顶栏、路由、通知、预览抽屉
+│   ├── ui.tsx                 # 公共组件、数据加载、错误提示
+│   ├── views/                 # 各页面：passports、transfers、marketplace、trades、overview、admin、account、documents
 │   └── globals.css            # 完整视觉系统和响应式样式
 ├── src/
 │   ├── main.tsx               # SPA 入口，挂载 React 到 #root
@@ -282,25 +339,24 @@ dist/
 
 ### 业务数据
 
-当前 Passport、Cross-border Transfer 和 Seller Listing 数据均为演示数据，定义在：
+业务数据保存在 D1 数据库中，经 `/api/*` 读取。本地的模拟数据由 `scripts/generate-seed.mjs` 生成（固定随机种子，每次结果相同），其中保留了原型中的 6 条示范记录。
 
-```text
-app/CwPlatform.tsx
-```
+所有页面都从 API 读取数据；页面地址带有记录编号（如 `#/passport-detail/DPP-HK-2026-00428`），刷新或分享链接会打开同一条记录。前端代码按页面拆分在 [app/views/](app/views/)，公共组件在 [app/ui.tsx](app/ui.tsx)。
 
-目前没有从数据库或外部 API 读取数据。CSV 导出也是在浏览器内把这些演示记录转换成文件。
+### 登录状态与演示账号
 
-### 登录状态
+| 账号 | 密码 | 角色 | 机构 |
+| --- | --- | --- | --- |
+| `demo` | `demo1234` | 管理员 | CW Passport |
+| `regulator` | `regulator1234` | 监管机构 | Environmental Protection Department |
+| `seller` | `seller1234` | 成员 | Circular Materials Ltd（卖方） |
+| `buyer` | `buyer1234` | 成员 | Guangdong Road Base Co.（买方） |
+| `customs` | `customs1234` | 成员，已申请监管身份待审核 | Customs and Excise Department |
 
-当前平台自身的登录、注册和找回密码属于浏览器端原型：
-
-- 演示账号为 `demo / demo1234`。
-- 新注册用户保存在浏览器 `localStorage`。
-- 模拟用户密码以明文形式保存在当前浏览器。
-- 登录结果没有经过服务器验证。
-- 清除浏览器数据或换设备后，本地注册账号不会同步。
-
-因此该登录方式只能用于 UI 演示，不能作为正式生产认证系统。正式上线前必须接入后端身份认证、密码哈希、服务器会话和访问控制。
+- 密码以 PBKDF2-SHA256 哈希保存；会话保存在 `sessions` 表，浏览器只持有 HttpOnly Cookie `cw_session`，有效期 7 天。
+- 注册时选择 Regulatory Agency 只是申请监管身份，需管理员在「Users」页面授予。
+- 同一账户 15 分钟内失败 5 次登录会被暂时锁定。
+- 找回密码会生成一次性重设链接。目前没有接入邮件服务，链接以 `[mail]` 开头打印在 `npm run dev` 的终端里；要真正发信，在 [worker/services/mailer.ts](worker/services/mailer.ts) 接入邮件服务商。
 
 ## 11. 环境变量与机密信息
 

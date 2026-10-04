@@ -1,0 +1,254 @@
+# Manual API requests for local development.
+# Open in VS Code with the "REST Client" extension (humao.rest-client) and click "Send Request".
+# Requires `npm run dev`. The session cookie from "Sign in" is reused by the following requests.
+# Run top to bottom: later requests reuse IDs returned by earlier ones.
+
+@api = http://localhost:3000/api
+@json = application/json
+
+### Health (no sign-in needed)
+GET {{api}}/health
+
+### Sign in as the demo administrator
+POST {{api}}/auth/login
+Content-Type: {{json}}
+
+{ "username": "demo", "password": "demo1234" }
+
+### Who am I
+GET {{api}}/auth/me
+
+# ── Passports ────────────────────────────────────────────────────────────────
+
+### Register a passport
+# @name passport
+POST {{api}}/passports
+Content-Type: {{json}}
+
+{
+  "material": "Recycled Concrete Aggregate",
+  "category": "Concrete",
+  "project": "Kai Tak Redevelopment",
+  "quantity": { "value": 120, "unit": "t" },
+  "location": "EcoPark, Tuen Mun",
+  "origin": "Hong Kong",
+  "stage": "Sorted"
+}
+
+### Record a lifecycle event (stages only move forward)
+POST {{api}}/passports/{{passport.response.body.id}}/events
+Content-Type: {{json}}
+
+{ "stage": "Processing", "place": "EcoPark", "location": "EcoPark Store 2" }
+
+### Verify (regulators and admins only)
+POST {{api}}/passports/{{passport.response.body.id}}/verify
+Content-Type: {{json}}
+
+{}
+
+### Lifecycle timeline
+GET {{api}}/passports/{{passport.response.body.id}}/events
+
+# ── Cross-border transfers ───────────────────────────────────────────────────
+
+### Create a transfer (passport must be Verified and Sorted/Processing; change the date to a future one)
+# @name transfer
+POST {{api}}/transfers
+Content-Type: {{json}}
+
+{ "passportId": "{{passport.response.body.id}}", "destination": "Shenzhen", "departureDate": "2026-12-01", "transportType": "Road Freight" }
+
+### Upload a document (required before "Documentation Submitted")
+POST {{api}}/transfers/{{transfer.response.body.id}}/documents
+X-Requested-With: fetch
+Content-Type: multipart/form-data; boundary=----cw
+
+------cw
+Content-Disposition: form-data; name="kind"
+
+Transfer Document
+------cw
+Content-Disposition: form-data; name="file"; filename="transfer.pdf"
+Content-Type: application/pdf
+
+%PDF-1.4
+% sample
+%%EOF
+------cw--
+
+### List the transfer's documents
+GET {{api}}/transfers/{{transfer.response.body.id}}/documents
+
+### Advance the transfer — run once per step, in this order:
+# Documentation Submitted → Inspection → Customs / Compliance Review → Cleared → Transport → Received
+POST {{api}}/transfers/{{transfer.response.body.id}}/events
+Content-Type: {{json}}
+
+{ "step": "Documentation Submitted" }
+
+# ── Listings ─────────────────────────────────────────────────────────────────
+
+### Create a listing (draft) from a verified passport
+# @name listing
+POST {{api}}/listings
+Content-Type: {{json}}
+
+{ "passportId": "{{passport.response.body.id}}" }
+
+### Mint the NFT passport (mock chain)
+POST {{api}}/listings/{{listing.response.body.id}}/mint
+Content-Type: {{json}}
+
+{}
+
+### Publish to the marketplace
+POST {{api}}/listings/{{listing.response.body.id}}/publish
+Content-Type: {{json}}
+
+{}
+
+# ── Trades ───────────────────────────────────────────────────────────────────
+
+### Open a trade (buyer side: the demand's company, or an admin)
+# @name trade
+POST {{api}}/trades
+Content-Type: {{json}}
+
+{ "listingId": "{{listing.response.body.id}}", "demandId": "DMD-2026-0071", "quantityValue": 100, "priceHkd": 15000 }
+
+### Complete (seller confirms delivery; NFT transferred on the mock chain)
+POST {{api}}/trades/{{trade.response.body.id}}/complete
+Content-Type: {{json}}
+
+{}
+
+### Settle (seller confirms payment)
+POST {{api}}/trades/{{trade.response.body.id}}/settle
+Content-Type: {{json}}
+
+{}
+
+### Sign out
+POST {{api}}/auth/logout
+Content-Type: {{json}}
+
+{}
+
+# ── Other demo accounts (sign in as one to test permissions) ─────────────────
+# regulator / regulator1234 · seller / seller1234 · buyer / buyer1234 · customs / customs1234 (pending regulator)
+
+### Sign in as the regulator
+POST {{api}}/auth/login
+Content-Type: {{json}}
+
+{ "username": "regulator", "password": "regulator1234" }
+
+### Sign in again as the demo administrator
+POST {{api}}/auth/login
+Content-Type: {{json}}
+
+{ "username": "demo", "password": "demo1234" }
+
+# ── Account ──────────────────────────────────────────────────────────────────
+
+### Update my profile
+PATCH {{api}}/auth/me
+Content-Type: {{json}}
+
+{ "contact": "Alex Leung", "phone": "+852 5555 0100" }
+
+### Request a password reset (the link is printed as [mail] in the `npm run dev` terminal)
+POST {{api}}/auth/forgot
+Content-Type: {{json}}
+
+{ "identifier": "seller" }
+
+# ── Corrections ──────────────────────────────────────────────────────────────
+
+### Register a passport to edit and delete
+# @name draft
+POST {{api}}/passports
+Content-Type: {{json}}
+
+{ "material": "Typo Materail", "category": "Timber", "project": "Test", "quantity": { "value": 10, "unit": "t" }, "location": "Yuen Long", "origin": "Hong Kong", "stage": "Collected" }
+
+### Correct it while it is still Pending
+PATCH {{api}}/passports/{{draft.response.body.id}}
+Content-Type: {{json}}
+
+{ "material": "Reclaimed Timber" }
+
+### Delete it (Pending, nothing attached)
+DELETE {{api}}/passports/{{draft.response.body.id}}
+Content-Type: {{json}}
+
+{}
+
+### Cancel a transfer that is still Preparing
+POST {{api}}/transfers/CBT-MO-ZH-2026-0042/cancel
+Content-Type: {{json}}
+
+{ "reason": "Buyer changed destination" }
+
+### Withdraw a listing
+POST {{api}}/listings/LST-HK-2026-0168/delist
+Content-Type: {{json}}
+
+{ "reason": "Sold elsewhere" }
+
+### Cancel an in-progress trade
+POST {{api}}/trades/TRD-2026-0024/cancel
+Content-Type: {{json}}
+
+{}
+
+# ── Demands and company profiles ─────────────────────────────────────────────
+
+### Post a buyer demand
+# @name demand
+POST {{api}}/demands
+Content-Type: {{json}}
+
+{ "industry": "Road Construction", "region": "Dongguan", "category": "Concrete", "quantity": { "value": 300, "unit": "t" }, "deadline": "2026-12-31", "contact": "buyer@example.com" }
+
+### My company's demands
+GET {{api}}/demands?mine=true
+
+### Company profile
+GET {{api}}/companies/Guangdong%20Road%20Base%20Co.
+
+### Matches for a demand
+GET {{api}}/matches?demandId=DMD-2026-0071&limit=5
+
+# ── Queues, stats, notifications, audit, admin ───────────────────────────────
+
+### Transfers waiting for a regulator
+GET {{api}}/transfers?queue=regulatory
+
+### Listings buyers can see: Hong Kong, available now, over 100 t
+GET {{api}}/listings?active=true&region=Hong%20Kong&availability=now&minQty=100
+
+### Overview stats for the last 90 days
+GET {{api}}/stats/overview?days=90
+
+### Material records
+GET {{api}}/stats/materials
+
+### My notifications
+GET {{api}}/notifications
+
+### Audit log (admins and regulators)
+GET {{api}}/audit?pageSize=20
+
+### Users waiting for the regulator role (admins)
+GET {{api}}/admin/users?pending=true
+
+### Grant the regulator role to the pending "customs" user
+PATCH {{api}}/admin/users/usr_customs
+Content-Type: {{json}}
+
+{ "role": "regulator" }
+
+### Export passports as CSV
+GET {{api}}/passports/export.csv?category=Metal

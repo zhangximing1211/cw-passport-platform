@@ -6,35 +6,58 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k -n web,api -c cyan,magenta \"npm:dev:web\" \"npm:dev:api\"",
+    "dev:web": "vite",
+    "dev:api": "wrangler dev --port 8787",
     "build": "vite build",
     "preview": "vite preview",
     "cf-login": "wrangler login",
+    "cf-typegen": "wrangler types",
     "deploy": "npm run build && wrangler deploy",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
-    "lint": "eslint . --ignore-pattern dist"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "wrangler d1 migrations apply cw-passport-db --local",
+    "db:seed": "wrangler d1 execute cw-passport-db --local --file=seed/demo.sql",
+    "db:setup": "npm run db:migrate && npm run db:seed",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p worker",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs && vitest run",
+    "test:api": "vitest run",
+    "lint": "eslint . --ignore-pattern dist",
+    "db:gen-seed": "node scripts/generate-seed.mjs",
+    "db:reset": "node scripts/generate-seed.mjs && npm run db:setup",
+    "db:path": "node scripts/db-path.mjs",
+    "db:query": "wrangler d1 execute cw-passport-db --local --command",
+    "test:e2e": "node tests/e2e.mjs"
   },
   "dependencies": {
+    "@hono/zod-validator": "0.9.1",
+    "drizzle-orm": "0.45.3",
+    "hono": "4.13.9",
     "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react-dom": "19.2.6",
+    "zod": "4.6.5"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.22.0",
     "@eslint/js": "9.39.4",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
+    "concurrently": "10.0.5",
+    "drizzle-kit": "0.31.11",
     "eslint": "9.39.4",
     "eslint-plugin-jsx-a11y": "6.10.2",
     "eslint-plugin-react": "7.37.5",
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "16.4.0",
+    "playwright-core": "1.63.0",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.59.3",
     "vite": "8.0.13",
-    "wrangler": "4.92.0"
+    "vitest": "4.1.11",
+    "wrangler": "4.124.0"
   },
   "type": "module"
 }

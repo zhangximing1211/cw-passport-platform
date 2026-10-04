@@ -1,11 +1,29 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "cw-passport-platform",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-05-15",
   "workers_dev": true,
   "preview_urls": true,
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
-  }
+    "not_found_handling": "single-page-application",
+    // Only /api/* reaches the Worker; everything else is served straight from dist/.
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cw-passport-db",
+      // Placeholder for local development. Before deploying, run
+      // `npx wrangler d1 create cw-passport-db` and paste the returned id here.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Uploaded documents and photos. Local dev/tests use a simulated bucket; before deploying,
+  // run `npx wrangler r2 bucket create cw-passport-files`.
+  "r2_buckets": [
+    { "binding": "FILES", "bucket_name": "cw-passport-files" }
+  ]
 }
